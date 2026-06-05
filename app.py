@@ -31,6 +31,8 @@ dataset = pd.read_csv(
 test_data = pd.read_csv(
     "dataset/customs_inspection_test_dataset.csv"
 )
+
+test_data_1=test_data.drop(columns=["Inspection_Required"])
 # ---------------------------------------------------
 # CUSTOM CSS
 # ---------------------------------------------------
@@ -109,7 +111,7 @@ Customs Inspection Prediction System
 # TABS
 # ---------------------------------------------------
 
-tab1, tab2 = st.tabs(["Prediction", "Analytics Dashboard"])
+tab1, tab2, tab3 = st.tabs(["Prediction", "Analytics Dashboard","Inspection Result"])
 
 # ===================================================
 # TAB 1 — PREDICTION
@@ -124,11 +126,11 @@ with tab1:
         st.subheader("Shipment Information")
         shipment_id = st.selectbox(
             "Shipment ID",
-            test_data["Shipment_ID"].unique(),help="Unique identifier for the shipment"
+            test_data_1["Shipment_ID"].unique(),help="Unique identifier for the shipment"
         )
         
-        shipment_record = test_data[
-            test_data["Shipment_ID"] == shipment_id
+        shipment_record = test_data_1[
+            test_data_1["Shipment_ID"] == shipment_id
         ].iloc[0]
         
         shipment_date = shipment_record["Shipment_Date"]
@@ -598,3 +600,165 @@ with tab2:
             yaxis=dict(title="", tickfont=dict(size=15))
         )
         st.plotly_chart(fig3, use_container_width=True, config={"displayModeBar": False})
+
+
+# ===================================================
+# TAB 3 — BULK INSPECTION ANALYSIS
+# ===================================================
+
+with tab3:
+
+    st.subheader("Bulk Inspection Analysis")
+
+    # Run Analysis Button
+    if st.button("Run Inspection Analysis"):
+
+        bulk_data = test_data_1.copy()
+
+        # Encode categorical columns
+        for col, encoder in label_encoders.items():
+
+            if col in bulk_data.columns:
+
+                try:
+                    bulk_data[col] = encoder.transform(
+                        bulk_data[col]
+                    )
+
+                except:
+                    bulk_data[col] = 0
+
+        # Arrange columns exactly as training
+        bulk_data = bulk_data[feature_columns]
+
+        # Predict
+        predictions = model.predict(bulk_data)
+
+        probabilities = model.predict_proba(
+            bulk_data
+        )[:, 1]
+
+        # Create Results
+        results = test_data_1.copy()
+
+        results["Inspection_Required"] = predictions
+
+        results["Inspection_Probability"] = (
+            probabilities * 100
+        ).round(2)
+
+        # Save results in session state
+        st.session_state["results"] = results
+
+    # ==================================================
+    # SHOW RESULTS AFTER BUTTON CLICK
+    # ==================================================
+
+    if "results" in st.session_state:
+
+        results = st.session_state["results"]
+
+        total_shipments = len(results)
+
+        inspection_required = (
+            results["Inspection_Required"] == 1
+        ).sum()
+
+        no_inspection = (
+            results["Inspection_Required"] == 0
+        ).sum()
+
+        k1, k2, k3 = st.columns(3)
+
+        with k1:
+            st.metric(
+                "Total Shipments",
+                f"{total_shipments:,}"
+            )
+
+        with k2:
+            st.metric(
+                "Inspection Required",
+                f"{inspection_required:,}"
+            )
+
+        with k3:
+            st.metric(
+                "No Inspection Required",
+                f"{no_inspection:,}"
+            )
+
+        st.success(
+            f"Analysis Completed for {total_shipments:,} Shipments"
+        )
+
+        # ==================================================
+        # FILTER INSPECTION REQUIRED SHIPMENTS
+        # ==================================================
+
+        inspection_shipments = results[
+            results["Inspection_Required"] == 1
+        ]
+
+        inspection_shipments = inspection_shipments.sort_values(
+            by="Inspection_Probability",
+            ascending=False
+        )
+
+        st.subheader(
+            "High Risk Shipments Requiring Inspection"
+        )
+
+        commodity_filter = st.selectbox(
+            "Filter by Commodity Type",
+            ["All"] +
+            sorted(
+                inspection_shipments[
+                    "Commodity_Type"
+                ].unique().tolist()
+            )
+        )
+
+        if commodity_filter == "All":
+
+            filtered_shipments = inspection_shipments
+
+        else:
+
+            filtered_shipments = inspection_shipments[
+                inspection_shipments[
+                    "Commodity_Type"
+                ] == commodity_filter
+            ]
+
+        st.info(
+            f"{len(filtered_shipments):,} shipments found"
+        )
+
+        st.dataframe(
+            filtered_shipments[
+                [
+                    "Shipment_ID",
+                    "Commodity_Type",
+                    "Shipper_Company_Name",
+                    "Consignee_Company_Name",
+                    "Inspection_Probability"
+                ]
+            ],
+            use_container_width=True
+        )
+
+        # ==================================================
+        # DOWNLOAD REPORT
+        # ==================================================
+
+        csv = filtered_shipments.to_csv(
+            index=False
+        )
+
+        st.download_button(
+            label="📥 Download Inspection Report",
+            data=csv,
+            file_name="inspection_required_shipments.csv",
+            mime="text/csv"
+        )
