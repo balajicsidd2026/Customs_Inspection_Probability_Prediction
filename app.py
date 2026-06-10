@@ -417,44 +417,70 @@ with tab2:
     # ---- ROW 1 ----
     chart1, chart2 = st.columns(2)
 
-    # 1. Monthly Inspection Trend
     with chart1:
-        monthly = (
-            filtered_data
-            .groupby(filtered_data["Shipment_Date"].dt.month_name().str[:3])
-            ["Inspection_Required"]
-            .mean()
+        # 1. Inspection Target Distribution
+        risk_data = (
+            filtered_data["Inspection_Required"]
+            .value_counts()
             .reset_index()
         )
-        month_order = ["Jan","Feb","Mar","Apr","May","Jun",
-                       "Jul","Aug","Sep","Oct","Nov","Dec"]
-        monthly["Shipment_Date"] = pd.Categorical(
-            monthly["Shipment_Date"], categories=month_order, ordered=True
-        )
-        monthly = monthly.sort_values("Shipment_Date")
-        monthly["Inspection_Required"] = (monthly["Inspection_Required"] * 100)
 
-        fig1 = px.line(monthly, x="Shipment_Date", y="Inspection_Required", markers=True)
+        risk_data.columns = [
+            "Inspection_Status",
+            "Count"
+        ]
+
+        risk_data["Inspection_Status"] = (
+            risk_data["Inspection_Status"]
+            .replace({
+                0: "No Inspection",
+                1: "Inspection Required"
+            })
+        )
+
+        fig1 = px.bar(
+            risk_data,
+            x="Inspection_Status",
+            y="Count",
+            text="Count",
+            title="1. Inspection Target Distribution",
+            color="Inspection_Status",
+            color_discrete_map={
+                "No Inspection": "#bfdbfe",
+                "Inspection Required": "#1d4ed8"
+            }
+        )
+
         fig1.update_traces(
-            mode="lines+markers+text",
-            text=monthly["Inspection_Required"].round(1),
-            textposition="top center",
-            line=dict(color="#0b66c3", width=3),
-            marker=dict(size=8, color="#0b66c3"),
-            textfont=dict(size=12, color="#111827")
+            textposition="outside"
         )
+
         fig1.update_layout(
-            title="1. Monthly Inspection Trend",
-            title_font_size=24, title_font_color="#111827",
-            height=420, template="plotly_white",
-            paper_bgcolor="white", plot_bgcolor="white",
+            height=420,
+            template="plotly_white",
+            showlegend=False,
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            title_font_size=20,
+            title_font_color="#111827",
             margin=dict(l=20, r=20, t=70, b=20),
-            xaxis=dict(title="Month", showgrid=False, tickfont=dict(size=14)),
-            yaxis=dict(title="Inspection Rate (%)", gridcolor="#E5E7EB",
-                       range=[0, monthly["Inspection_Required"].max() + 5],
-                       tickfont=dict(size=14))
+            xaxis=dict(
+                title="",
+                tickfont=dict(size=14)
+            ),
+            yaxis=dict(
+                title="Shipment Count",
+                gridcolor="#E5E7EB",
+                tickfont=dict(size=13)
+            )
         )
-        st.plotly_chart(fig1, use_container_width=True)
+
+        st.plotly_chart(
+            fig1,
+            use_container_width=True,
+            config={"displayModeBar": False}
+        )
+
 
     # 2. Commodity Type vs Inspection Count
     with chart2:
@@ -600,8 +626,107 @@ with tab2:
             yaxis=dict(title="", tickfont=dict(size=15))
         )
         st.plotly_chart(fig3, use_container_width=True, config={"displayModeBar": False})
+        
+    chart6, chart7, chart8 = st.columns(3)
+    
+        # 1. Monthly Inspection Trend
+    with chart6:
+        monthly = (
+            filtered_data
+            .groupby(filtered_data["Shipment_Date"].dt.month_name().str[:3])
+            ["Inspection_Required"]
+            .mean()
+            .reset_index()
+        )
+        month_order = ["Jan","Feb","Mar","Apr","May","Jun",
+                       "Jul","Aug","Sep","Oct","Nov","Dec"]
+        monthly["Shipment_Date"] = pd.Categorical(
+            monthly["Shipment_Date"], categories=month_order, ordered=True
+        )
+        monthly = monthly.sort_values("Shipment_Date")
+        monthly["Inspection_Required"] = (monthly["Inspection_Required"] * 100)
 
+        fig6 = px.line(monthly, x="Shipment_Date", y="Inspection_Required", markers=True)
+        fig6.update_traces(
+            mode="lines+markers+text",
+            text=monthly["Inspection_Required"].round(1),
+            textposition="top center",
+            line=dict(color="#0b66c3", width=3),
+            marker=dict(size=8, color="#0b66c3"),
+            textfont=dict(size=12, color="#111827")
+        )
+        fig6.update_layout(
+            title="6. Monthly Inspection Trend",
+            title_font_size=24, title_font_color="#111827",
+            height=420, template="plotly_white",
+            paper_bgcolor="white", plot_bgcolor="white",
+            margin=dict(l=20, r=20, t=70, b=20),
+            xaxis=dict(title="Month", showgrid=False, tickfont=dict(size=14)),
+            yaxis=dict(title="Inspection Rate (%)", gridcolor="#E5E7EB",
+                       range=[0, monthly["Inspection_Required"].max() + 5],
+                       tickfont=dict(size=14))
+        )
+        st.plotly_chart(fig6, use_container_width=True)
+    
+    with chart7:
+        # Missing Documents vs Inspection Rate
 
+        risk_data = (
+            filtered_data
+            .groupby("Missing_Documents")["Inspection_Required"]
+            .mean()
+            .reset_index()
+        )
+
+        risk_data["Inspection_Rate"] = (
+            risk_data["Inspection_Required"] * 100
+        ).round(1)
+
+        fig_missing = px.bar(
+            risk_data,
+            x="Missing_Documents",
+            y="Inspection_Rate",
+            text="Inspection_Rate",
+            title="7.Missing Documents vs Inspection Rate",
+            color="Missing_Documents",
+            color_discrete_map={
+                "No": "#bfdbfe",
+                "Yes": "#1d4ed8"
+            }
+        )
+
+        fig_missing.update_traces(
+            texttemplate='%{text:.1f}%',
+            textposition='outside'
+        )
+
+        fig_missing.update_layout(
+            height=420,
+            template="plotly_white",
+            showlegend=False,
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            title_font_size=20,
+            title_font_color="#111827",
+            margin=dict(l=20, r=20, t=70, b=20),
+            xaxis=dict(
+                title="Missing Documents",
+                tickfont=dict(size=14)
+            ),
+            yaxis=dict(
+                title="Inspection Rate (%)",
+                gridcolor="#E5E7EB",
+                tickfont=dict(size=13),
+                range=[0, 100]
+            )
+        )
+
+        st.plotly_chart(
+            fig_missing,
+            use_container_width=True,
+            config={"displayModeBar": False}
+        )
+    
 # ===================================================
 # TAB 3 — BULK INSPECTION ANALYSIS
 # ===================================================
